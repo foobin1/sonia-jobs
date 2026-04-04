@@ -116,7 +116,7 @@ def parse_tasker_job(raw: list, item: dict) -> dict | None:
         return None
 
     # Build job URL
-    job_url = f"https://www.tasker.com.tw/task/{tk_no}"
+    job_url = f"https://www.tasker.com.tw/cases/{tk_no}"
 
     # Parse location
     city = None
