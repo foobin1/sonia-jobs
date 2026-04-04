@@ -18,7 +18,7 @@ INGEST_KEY = os.environ.get("INGEST_KEY", "")
 
 # Pagination settings
 MAX_PAGES = 50          # Safety cap per category
-MAX_AGE_DAYS = 7        # Stop paginating when jobs are older than this
+MAX_AGE_DAYS = 3        # Stop paginating when jobs are older than this
 # On regular polls (not backfill), only check first few pages for new jobs
 POLL_PAGES = 3
 
