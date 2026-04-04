@@ -133,17 +133,23 @@ def parse_tasker_job(raw: list, item: dict) -> dict | None:
     if updated_at and isinstance(updated_at, str):
         posted_at = parse_relative_time_tasker(updated_at)
 
-    # Budget
+    # Budget — NUXT stores as dict ref like {'text': <idx>} → {'text': '$10,000'}
     budget = None
     budget_val = resolve_value(raw, item.get('budget'))
     if isinstance(budget_val, dict):
-        # Budget might be a dict with min/max
-        bmin = budget_val.get('min') or budget_val.get('budget_min')
-        bmax = budget_val.get('max') or budget_val.get('budget_max')
-        if bmin and bmax:
-            budget = f"${bmin:,}-{bmax:,}" if isinstance(bmin, int) else f"${bmin}-{bmax}"
-        elif bmin:
-            budget = f"${bmin:,}+" if isinstance(bmin, int) else f"${bmin}+"
+        # Resolve nested references in the dict
+        budget_text = budget_val.get('text')
+        if budget_text is not None:
+            resolved_text = resolve_value(raw, budget_text)
+            if isinstance(resolved_text, str) and resolved_text:
+                budget = resolved_text
+        if not budget:
+            bmin = resolve_value(raw, budget_val.get('min', budget_val.get('budget_min')))
+            bmax = resolve_value(raw, budget_val.get('max', budget_val.get('budget_max')))
+            if bmin and bmax:
+                budget = f"${bmin:,}-{bmax:,}" if isinstance(bmin, int) else f"${bmin}-{bmax}"
+            elif bmin:
+                budget = f"${bmin:,}+" if isinstance(bmin, int) else f"${bmin}+"
     elif isinstance(budget_val, (int, float)) and budget_val > 0:
         budget = f"${int(budget_val):,}"
     elif isinstance(budget_val, str) and budget_val:
