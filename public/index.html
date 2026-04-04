@@ -220,14 +220,17 @@ function renderJobs(jobs) {
   }
   empty.style.display = 'none';
 
-  list.innerHTML = jobs.map(j => {
+  // Store jobs in a lookup so onclick doesn't need inline JSON
+  window._jobsCache = {};
+  list.innerHTML = jobs.map((j, i) => {
+    window._jobsCache[i] = j;
     const catName = getCategoryName(j.category);
     const loc = [j.city, j.district].filter(Boolean).join(' ');
     const timeAgo = j.scrapedAt ? formatTimeAgo(j.scrapedAt) : '';
     const desc = j.description || '';
 
     return `
-      <div class="glass rounded-xl p-4 cursor-pointer transition" onclick='showDetail(${JSON.stringify(j).replace(/'/g, "&#39;")})'>
+      <div class="glass rounded-xl p-4 cursor-pointer transition" onclick="showDetail(window._jobsCache[${i}])">
         <div class="flex items-start justify-between gap-2 mb-2">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="badge badge-${j.category}">${catName}</span>
