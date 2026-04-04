@@ -211,6 +211,7 @@ async function loadCategories() {
 
 async function loadJobs(page = 1) {
   currentPage = page;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   const params = new URLSearchParams();
   const cat = document.getElementById('filterCategory').value;
   const city = document.getElementById('filterCity').value;
