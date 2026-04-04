@@ -50,7 +50,17 @@ export function registerIngestRoutes(app: FastifyInstance) {
           description: job.description ?? null,
           budget: job.budget ?? null,
           clientName: job.client_name ?? null,
-        }).onConflictDoNothing({ target: jobs.jobUrl });
+        }).onConflictDoUpdate({
+          target: jobs.jobUrl,
+          set: {
+            title: job.title,
+            description: job.description ?? null,
+            budget: job.budget ?? null,
+            city: job.city ?? null,
+            district: job.district ?? null,
+            postedAt: job.posted_at ? new Date(job.posted_at) : null,
+          },
+        });
         inserted++;
       } catch (err: any) {
         // FK violation (bad category) — skip
