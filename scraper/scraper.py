@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""PRO360 job scraper — polls categories and ingests to sonia-jobs API."""
+"""Multi-platform job scraper — PRO360 + Tasker → sonia-jobs API."""
 
 import argparse
-import json
 import os
 import random
 import time
@@ -12,15 +11,19 @@ from datetime import datetime, timedelta, timezone
 from config import BASE_URL, CATEGORIES, POLL_INTERVAL_MIN, POLL_INTERVAL_MAX, \
     REQUEST_DELAY_MIN, REQUEST_DELAY_MAX, USER_AGENTS
 from parser import parse_jobs_page
+from tasker_parser import parse_tasker_page
 
 API_URL = os.environ.get("API_URL", "http://localhost:3000")
 INGEST_KEY = os.environ.get("INGEST_KEY", "")
 
 # Pagination settings
-MAX_PAGES = 50          # Safety cap per category
+MAX_PAGES = 50          # Safety cap per category (backfill)
 MAX_AGE_DAYS = 3        # Stop paginating when jobs are older than this
-# On regular polls (not backfill), only check first few pages for new jobs
-POLL_PAGES = 3
+POLL_PAGES = 3          # Regular poll: only first few pages
+
+TASKER_URL = "https://www.tasker.com.tw"
+TASKER_PAGES = 5        # Tasker pages to scrape on backfill
+TASKER_POLL_PAGES = 2   # Regular poll
 
 seen_urls: set[str] = set()
 
@@ -33,8 +36,10 @@ def get_headers() -> dict:
     }
 
 
-def fetch_page(slug: str, path: str, page: int) -> list[dict]:
-    """Fetch and parse a single page of a category."""
+# === PRO360 ===
+
+def fetch_pro360_page(slug: str, path: str, page: int) -> list[dict]:
+    """Fetch and parse a single page of a PRO360 category."""
     url = BASE_URL + path
     if page > 1:
         url += f"?page={page}"
@@ -43,10 +48,14 @@ def fetch_page(slug: str, path: str, page: int) -> list[dict]:
         resp = requests.get(url, headers=get_headers(), timeout=15)
         resp.raise_for_status()
     except Exception as e:
-        print(f"  [fetch] Error fetching {slug} p{page}: {e}")
+        print(f"  [pro360] Error fetching {slug} p{page}: {e}")
         return []
 
     jobs = parse_jobs_page(resp.text, slug)
+    # Add source and remap field name
+    for j in jobs:
+        j['job_url'] = j.pop('pro360_url')
+        j['source'] = 'pro360'
     return jobs
 
 
@@ -64,33 +73,93 @@ def is_too_old(jobs: list[dict]) -> bool:
     return False
 
 
-def fetch_category(slug: str, cat: dict, max_pages: int = MAX_PAGES) -> list[dict]:
-    """Fetch all pages of a category until jobs are too old or max pages reached."""
+def scrape_pro360(max_pages: int) -> list[dict]:
+    """Scrape all PRO360 categories."""
     all_jobs = []
+    categories = list(CATEGORIES.items())
+    random.shuffle(categories)
 
-    for page in range(1, max_pages + 1):
-        print(f"  [fetch] {slug} p{page}: {BASE_URL + cat['path']}{'?page=' + str(page) if page > 1 else ''}")
-        jobs = fetch_page(slug, cat["path"], page)
+    for slug, cat in categories:
+        cat_jobs = []
+        for page in range(1, max_pages + 1):
+            print(f"  [pro360] {slug} p{page}")
+            jobs = fetch_pro360_page(slug, cat["path"], page)
 
-        if not jobs:
-            print(f"  [fetch] {slug} p{page}: no jobs found, stopping")
-            break
+            if not jobs:
+                break
 
-        all_jobs.extend(jobs)
-        print(f"  [fetch] {slug} p{page}: {len(jobs)} jobs")
+            cat_jobs.extend(jobs)
 
-        # Stop if we hit jobs older than 7 days
-        if is_too_old(jobs):
-            print(f"  [fetch] {slug} p{page}: reached jobs older than {MAX_AGE_DAYS} days, stopping")
-            break
+            if is_too_old(jobs):
+                print(f"  [pro360] {slug} p{page}: reached {MAX_AGE_DAYS}-day limit")
+                break
 
-        # Anti-ban delay between pages
+            delay = random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX)
+            time.sleep(delay)
+
+        # Dedup
+        new_jobs = [j for j in cat_jobs if j['job_url'] not in seen_urls]
+        for j in new_jobs:
+            seen_urls.add(j['job_url'])
+        all_jobs.extend(new_jobs)
+
+        if new_jobs:
+            print(f"  [pro360] {slug}: {len(new_jobs)} new jobs")
+        else:
+            print(f"  [pro360] {slug}: no new jobs")
+
         delay = random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX)
         time.sleep(delay)
 
-    print(f"  [fetch] {slug}: total {len(all_jobs)} jobs across {min(page, max_pages)} pages")
     return all_jobs
 
+
+# === Tasker ===
+
+def scrape_tasker(max_pages: int) -> list[dict]:
+    """Scrape Tasker /cases/top pages."""
+    all_jobs = []
+
+    for page in range(1, max_pages + 1):
+        url = f"{TASKER_URL}/cases/top"
+        if page > 1:
+            url += f"?page={page}"
+
+        print(f"  [tasker] page {page}: {url}")
+
+        try:
+            resp = requests.get(url, headers=get_headers(), timeout=15)
+            resp.raise_for_status()
+        except Exception as e:
+            print(f"  [tasker] Error fetching page {page}: {e}")
+            break
+
+        jobs = parse_tasker_page(resp.text)
+
+        if not jobs:
+            print(f"  [tasker] page {page}: no jobs found, stopping")
+            break
+
+        # Dedup
+        new_jobs = [j for j in jobs if j['job_url'] not in seen_urls]
+        for j in new_jobs:
+            seen_urls.add(j['job_url'])
+        all_jobs.extend(new_jobs)
+
+        print(f"  [tasker] page {page}: {len(jobs)} jobs ({len(new_jobs)} new)")
+
+        if is_too_old(jobs):
+            print(f"  [tasker] page {page}: reached {MAX_AGE_DAYS}-day limit")
+            break
+
+        delay = random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX)
+        time.sleep(delay)
+
+    print(f"  [tasker] total: {len(all_jobs)} new jobs")
+    return all_jobs
+
+
+# === Ingest ===
 
 def ingest_jobs(jobs: list[dict]) -> dict | None:
     """Send jobs to the ingest API."""
@@ -114,64 +183,50 @@ def ingest_jobs(jobs: list[dict]) -> dict | None:
 
 
 def scrape_round(backfill: bool = False):
-    """Scrape all categories once."""
-    all_jobs = []
-    categories = list(CATEGORIES.items())
-    random.shuffle(categories)
+    """Scrape all platforms once."""
+    pro360_pages = MAX_PAGES if backfill else POLL_PAGES
+    tasker_pages = TASKER_PAGES if backfill else TASKER_POLL_PAGES
 
-    # Backfill: paginate deep. Regular poll: only first few pages.
-    max_pages = MAX_PAGES if backfill else POLL_PAGES
+    # PRO360
+    print(f"  --- PRO360 (max {pro360_pages} pages/category) ---")
+    pro360_jobs = scrape_pro360(pro360_pages)
 
-    for slug, cat in categories:
-        jobs = fetch_category(slug, cat, max_pages=max_pages)
+    # Tasker
+    print(f"  --- Tasker (max {tasker_pages} pages) ---")
+    tasker_jobs = scrape_tasker(tasker_pages)
 
-        new_jobs = []
-        for job in jobs:
-            url = job["pro360_url"]
-            if url not in seen_urls or backfill:
-                new_jobs.append(job)
-                seen_urls.add(url)
-
-        if new_jobs:
-            all_jobs.extend(new_jobs)
-            print(f"  [{slug}] {len(new_jobs)} new jobs")
-        else:
-            print(f"  [{slug}] No new jobs")
-
-        # Anti-ban delay between categories
-        delay = random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX)
-        time.sleep(delay)
+    all_jobs = pro360_jobs + tasker_jobs
 
     if all_jobs:
-        # Batch ingest (max 200 per request)
         for i in range(0, len(all_jobs), 200):
             batch = all_jobs[i:i + 200]
             ingest_jobs(batch)
 
+    print(f"  === Total: {len(pro360_jobs)} PRO360 + {len(tasker_jobs)} Tasker = {len(all_jobs)} jobs ===")
     return len(all_jobs)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="PRO360 Job Scraper")
-    parser.add_argument("--backfill", action="store_true", help="Paginate deep to collect last 7 days of jobs")
+    parser = argparse.ArgumentParser(description="Multi-Platform Job Scraper")
+    parser.add_argument("--backfill", action="store_true", help="Paginate deep to collect last 3 days of jobs")
     args = parser.parse_args()
 
     if not INGEST_KEY:
         print("[ERROR] INGEST_KEY environment variable is required")
         return
 
-    print(f"[scraper] Starting PRO360 scraper")
+    print(f"[scraper] Starting multi-platform scraper")
     print(f"[scraper] API: {API_URL}")
-    print(f"[scraper] Categories: {len(CATEGORIES)}")
+    print(f"[scraper] PRO360 categories: {len(CATEGORIES)}")
+    print(f"[scraper] Platforms: PRO360 + Tasker")
     print(f"[scraper] Backfill: {args.backfill}")
-    print(f"[scraper] Max pages: {MAX_PAGES if args.backfill else POLL_PAGES} per category")
 
-    # First round — backfill paginates deep
+    # First round
     print(f"\n[scraper] === Round 1 (backfill={args.backfill}) ===")
     count = scrape_round(backfill=args.backfill)
-    print(f"[scraper] Round 1 complete: {count} jobs found\n")
+    print(f"[scraper] Round 1 complete: {count} jobs\n")
 
-    # Polling loop — only checks first few pages for new jobs
+    # Polling loop
     round_num = 2
     while True:
         interval = random.uniform(POLL_INTERVAL_MIN, POLL_INTERVAL_MAX)

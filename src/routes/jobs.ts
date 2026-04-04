@@ -12,6 +12,9 @@ export function registerJobRoutes(app: FastifyInstance) {
 
     const conditions: any[] = [];
 
+    if (q.source) {
+      conditions.push(eq(jobs.source, q.source));
+    }
     if (q.category) {
       conditions.push(eq(jobs.category, q.category));
     }

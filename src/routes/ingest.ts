@@ -3,12 +3,12 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { jobs } from '../db/schema.js';
 import { env } from '../config.js';
-import { sql } from 'drizzle-orm';
 
 const jobSchema = z.object({
-  pro360_url: z.string().min(1),
+  job_url: z.string().min(1),
   title: z.string().min(1),
   category: z.string().min(1),
+  source: z.enum(['pro360', 'tasker']).default('pro360'),
   city: z.string().nullable().optional(),
   district: z.string().nullable().optional(),
   posted_at: z.string().nullable().optional(),
@@ -40,16 +40,17 @@ export function registerIngestRoutes(app: FastifyInstance) {
     for (const job of body.jobs) {
       try {
         await db.insert(jobs).values({
-          pro360Url: job.pro360_url,
+          jobUrl: job.job_url,
           title: job.title,
           category: job.category,
+          source: job.source,
           city: job.city ?? null,
           district: job.district ?? null,
           postedAt: job.posted_at ? new Date(job.posted_at) : null,
           description: job.description ?? null,
           budget: job.budget ?? null,
           clientName: job.client_name ?? null,
-        }).onConflictDoNothing({ target: jobs.pro360Url });
+        }).onConflictDoNothing({ target: jobs.jobUrl });
         inserted++;
       } catch (err: any) {
         // FK violation (bad category) — skip

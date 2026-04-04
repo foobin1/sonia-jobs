@@ -4,16 +4,18 @@ export const categories = pgTable('categories', {
   slug: text('slug').primaryKey(),
   nameEn: text('name_en').notNull(),
   nameZh: text('name_zh').notNull(),
-  pro360Path: text('pro360_path').notNull(),
+  path: text('path').notNull(),
+  source: text('source').notNull().default('pro360'),
   enabled: boolean('enabled').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const jobs = pgTable('jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  pro360Url: text('pro360_url').unique().notNull(),
+  jobUrl: text('job_url').unique().notNull(),
   title: text('title').notNull(),
   category: text('category').notNull().references(() => categories.slug),
+  source: text('source').notNull().default('pro360'),
   city: text('city'),
   district: text('district'),
   postedAt: timestamp('posted_at', { withTimezone: true }),
@@ -25,6 +27,7 @@ export const jobs = pgTable('jobs', {
 }, (table) => [
   index('idx_jobs_category').on(table.category),
   index('idx_jobs_city').on(table.city),
+  index('idx_jobs_source').on(table.source),
   index('idx_jobs_posted_at').on(table.postedAt),
   index('idx_jobs_scraped_at').on(table.scrapedAt),
 ]);

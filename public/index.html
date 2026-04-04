@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sonia Jobs — PRO360 Job Dashboard</title>
+  <title>Sonia Jobs — Job Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
@@ -21,6 +21,22 @@
     .badge-pest_control { background: rgba(34,197,94,0.2); color: #4ade80; }
     .badge-ac_repair { background: rgba(96,165,250,0.2); color: #93c5fd; }
     .badge-web_dev { background: rgba(139,92,246,0.2); color: #a78bfa; }
+    .badge-tasker_design { background: rgba(236,72,153,0.2); color: #f472b6; }
+    .badge-tasker_marketing { background: rgba(249,115,22,0.2); color: #fb923c; }
+    .badge-tasker_it { background: rgba(139,92,246,0.2); color: #a78bfa; }
+    .badge-tasker_writing { background: rgba(234,179,8,0.2); color: #facc15; }
+    .badge-tasker_video { background: rgba(20,184,166,0.2); color: #2dd4bf; }
+    .badge-tasker_translation { background: rgba(96,165,250,0.2); color: #93c5fd; }
+    .badge-tasker_accounting { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .badge-tasker_lifestyle { background: rgba(239,68,68,0.2); color: #f87171; }
+    .badge-tasker_ai { background: rgba(168,85,247,0.2); color: #c084fc; }
+    .badge-tasker_other { background: rgba(107,114,128,0.2); color: #9ca3af; }
+    .source-pill { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px; }
+    .source-pro360 { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .source-tasker { background: rgba(234,179,8,0.15); color: #facc15; }
+    .platform-btn { padding: 6px 14px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+    .platform-btn.active { border-color: rgba(96,165,250,0.4); background: rgba(96,165,250,0.15); color: #60a5fa; }
+    .platform-btn:not(.active) { background: rgba(255,255,255,0.04); color: #94a3b8; }
     .desc-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 50; display: none; justify-content: center; align-items: center; padding: 1rem; }
     .modal-backdrop.active { display: flex; }
@@ -50,6 +66,13 @@
   </header>
 
   <main class="max-w-7xl mx-auto px-4 py-4">
+    <!-- Platform Toggle -->
+    <div class="flex gap-2 mb-3" id="platformToggle">
+      <button class="platform-btn active" onclick="setSource('')" data-source="" data-en="All" data-zh="全部">All</button>
+      <button class="platform-btn" onclick="setSource('pro360')" data-source="pro360">PRO360</button>
+      <button class="platform-btn" onclick="setSource('tasker')" data-source="tasker">Tasker</button>
+    </div>
+
     <!-- Filters -->
     <div class="flex flex-wrap gap-2 mb-4">
       <select id="filterCategory" onchange="loadJobs(1)">
@@ -127,11 +150,26 @@ const i18n = { lang: localStorage.getItem('sonia-jobs-lang') || 'en' };
 const CATEGORY_COLORS = {
   cleaning: '#60a5fa', handyman: '#facc15', moving: '#fb923c', tutoring: '#c084fc',
   design: '#f472b6', photography: '#2dd4bf', renovation: '#f87171',
-  pest_control: '#4ade80', ac_repair: '#93c5fd', web_dev: '#a78bfa'
+  pest_control: '#4ade80', ac_repair: '#93c5fd', web_dev: '#a78bfa',
+  tasker_design: '#f472b6', tasker_marketing: '#fb923c', tasker_it: '#a78bfa',
+  tasker_writing: '#facc15', tasker_video: '#2dd4bf', tasker_translation: '#93c5fd',
+  tasker_accounting: '#4ade80', tasker_lifestyle: '#f87171', tasker_ai: '#c084fc',
+  tasker_other: '#9ca3af'
 };
 let charts = {};
 let currentPage = 1;
+let currentSource = '';
 let categoriesData = [];
+
+function setSource(source) {
+  currentSource = source;
+  document.querySelectorAll('#platformToggle .platform-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.source === source);
+  });
+  updateCategoryFilter();
+  loadJobs(1);
+  loadStats();
+}
 
 // === i18n ===
 function toggleLang() {
@@ -179,6 +217,7 @@ async function loadJobs(page = 1) {
   const keyword = document.getElementById('filterKeyword').value.trim();
   const hours = document.getElementById('filterHours').value;
 
+  if (currentSource) params.set('source', currentSource);
   if (cat) params.set('category', cat);
   if (city) params.set('city', city);
   if (keyword) params.set('keyword', keyword);
@@ -196,9 +235,28 @@ async function loadJobs(page = 1) {
   } catch (e) { console.error('Failed to load jobs:', e); }
 }
 
+function updateCategoryFilter() {
+  const sel = document.getElementById('filterCategory');
+  const current = sel.value;
+  sel.innerHTML = '<option value="" data-en="All Categories" data-zh="全部分類">' +
+    (i18n.lang === 'en' ? 'All Categories' : '全部分類') + '</option>';
+  categoriesData
+    .filter(c => !currentSource || c.source === currentSource)
+    .forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.slug;
+      opt.textContent = i18n.lang === 'en' ? c.nameEn : c.nameZh;
+      opt.setAttribute('data-en', c.nameEn);
+      opt.setAttribute('data-zh', c.nameZh);
+      if (c.slug === current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+}
+
 async function loadStats() {
   const hours = document.getElementById('filterHours').value;
-  const params = hours !== '0' ? `?hours=${hours}` : '?hours=8760';
+  let params = hours !== '0' ? `?hours=${hours}` : '?hours=8760';
+  if (currentSource) params += `&source=${currentSource}`;
   try {
     const res = await fetch(`/api/stats${params}`);
     const data = await res.json();
@@ -228,10 +286,14 @@ function renderJobs(jobs) {
     const timeAgo = j.scrapedAt ? formatTimeAgo(j.scrapedAt) : '';
     const desc = j.description || '';
 
+    const srcLabel = j.source === 'tasker' ? 'Tasker' : 'PRO360';
+    const srcClass = j.source === 'tasker' ? 'source-tasker' : 'source-pro360';
+
     return `
       <div class="glass rounded-xl p-4 cursor-pointer transition" onclick="showDetail(window._jobsCache[${i}])">
         <div class="flex items-start justify-between gap-2 mb-2">
           <div class="flex items-center gap-2 flex-wrap">
+            <span class="source-pill ${srcClass}">${srcLabel}</span>
             <span class="badge badge-${j.category}">${catName}</span>
             ${loc ? `<span class="text-xs text-gray-400">📍 ${loc}</span>` : ''}
             ${timeAgo ? `<span class="text-xs text-gray-500">${timeAgo}</span>` : ''}
@@ -349,9 +411,16 @@ function showDetail(job) {
   const timeAgo = job.scrapedAt ? formatTimeAgo(job.scrapedAt) : '';
   const postedTime = job.postedAt ? new Date(job.postedAt).toLocaleString() : '';
 
+  const srcLabel = job.source === 'tasker' ? 'Tasker' : 'PRO360';
+  const srcClass = job.source === 'tasker' ? 'source-tasker' : 'source-pro360';
+  const viewLabel = i18n.lang === 'en' ? `View on ${srcLabel} ↗` : `在${srcLabel}查看 ↗`;
+
   document.getElementById('modalContent').innerHTML = `
     <div class="flex items-center justify-between mb-4">
-      <span class="badge badge-${job.category}">${catName}</span>
+      <div class="flex items-center gap-2">
+        <span class="source-pill ${srcClass}">${srcLabel}</span>
+        <span class="badge badge-${job.category}">${catName}</span>
+      </div>
       <button onclick="closeModal()" class="text-gray-400 hover:text-white text-xl">&times;</button>
     </div>
     <h2 class="text-xl font-bold text-white mb-3">${esc(job.title)}</h2>
@@ -363,9 +432,9 @@ function showDetail(job) {
     </div>
     ${job.description ? `<div class="text-gray-300 leading-relaxed mb-4 whitespace-pre-wrap">${esc(job.description)}</div>` : ''}
     <div class="flex gap-2 mt-4">
-      <a href="${job.pro360Url}" target="_blank" rel="noopener"
+      <a href="${job.jobUrl}" target="_blank" rel="noopener"
          class="flex-1 text-center py-2 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition text-sm font-medium">
-        ${i18n.lang === 'en' ? 'View on PRO360 ↗' : '在PRO360查看 ↗'}
+        ${viewLabel}
       </a>
     </div>
   `;
