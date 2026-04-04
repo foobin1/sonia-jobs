@@ -25,7 +25,6 @@ def parse_relative_time(text: str) -> str | None:
     if m:
         return (now - timedelta(days=int(m.group(1)))).isoformat()
 
-    # Try "YYYY/MM/DD" format
     m = re.search(r'(\d{4})/(\d{1,2})/(\d{1,2})', text)
     if m:
         dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=TW_TZ)
@@ -35,12 +34,17 @@ def parse_relative_time(text: str) -> str | None:
 
 
 def parse_location(text: str) -> tuple[str | None, str | None]:
-    """Split location string into (city, district)."""
+    """Split '新北市 三重區' into (city, district)."""
     text = text.strip()
     if not text:
         return None, None
 
-    # Common pattern: "台北市中山區" or "台北市 中山區"
+    # PRO360 uses space-separated: "新北市 三重區"
+    parts = text.split()
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+
+    # Fallback: "台北市中山區"
     m = re.match(r'(.+?[市縣])(.+?[區鄉鎮市])?', text)
     if m:
         return m.group(1), m.group(2)
@@ -53,10 +57,10 @@ def parse_jobs_page(html: str, category: str) -> list[dict]:
     soup = BeautifulSoup(html, 'html.parser')
     results = []
 
-    cards = soup.select('.div_request_card')
+    # Cards are <section class="div_request_card">
+    cards = soup.select('section.div_request_card')
     if not cards:
-        # Try alternative selectors
-        cards = soup.select('[class*="request_card"]')
+        cards = soup.select('.div_request_card')
 
     for card in cards:
         try:
@@ -71,82 +75,96 @@ def parse_jobs_page(html: str, category: str) -> list[dict]:
 
 
 def parse_single_card(card, category: str) -> dict | None:
-    """Parse a single job card element."""
-    # Title
-    title_el = card.select_one('.title_text') or card.select_one('h3') or card.select_one('[class*="title"]')
-    if not title_el:
-        return None
-    title = title_el.get_text(strip=True)
-    if not title:
-        return None
+    """Parse a single PRO360 job card.
 
-    # URL
-    link = card.select_one('a[href]')
+    Structure:
+    - section.div_request_card
+      - div.div_request_card_first
+        - h2: title (e.g. "窗簾清潔")
+        - span: client name (e.g. "莊〇生")
+        - img[alt="地區"] + text: location
+        - img[alt="金額"] + text: budget info
+        - div with "XX分鐘前": time
+      - div.div_request_card_second
+        - spans: description fragments
+      - div.request_card_footer
+        - a[href*="/case/request/"]: unique job URL
+    """
+
+    # === URL (from footer — this is the unique job identifier) ===
     url = None
-    if link:
-        href = link.get('href', '')
-        if href.startswith('/'):
-            url = BASE_URL + href
-        elif href.startswith('http'):
+    footer_link = card.select_one('.request_card_footer a[href*="/case/request/"]')
+    if footer_link:
+        href = footer_link.get('href', '')
+        if href.startswith('http'):
             url = href
-
+        elif href.startswith('/'):
+            url = BASE_URL + href
+    if not url:
+        # Try any link with /case/request/
+        for a in card.select('a[href]'):
+            href = a.get('href', '')
+            if '/case/request/' in href:
+                url = href if href.startswith('http') else BASE_URL + href
+                break
     if not url:
         return None
 
-    # Location (near location icon)
-    city, district = None, None
-    loc_icon = card.select_one('.icon_location_circle')
-    if loc_icon:
-        loc_text = loc_icon.find_next(string=True)
-        if loc_text:
-            city, district = parse_location(loc_text.strip())
-    if not city:
-        # Fallback: look for any element with location-like text
-        for el in card.select('span, div, p'):
-            text = el.get_text(strip=True)
-            if re.match(r'.+[市縣]', text) and len(text) < 20:
-                city, district = parse_location(text)
+    # === Title (h2 inside div_request_card_first) ===
+    title = None
+    h2 = card.select_one('.div_request_card_first h2')
+    if h2:
+        title = h2.get_text(strip=True)
+    if not title:
+        return None
+
+    # === Client name (span after h2 in the flex row) ===
+    client_name = None
+    first_div = card.select_one('.div_request_card_first')
+    if first_div:
+        # The client name span is at the same level as h2
+        for span in first_div.select('span'):
+            text = span.get_text(strip=True)
+            if text and len(text) < 20 and '前' not in text:
+                client_name = text
                 break
 
-    # Time
+    # === Location (img[alt="地區"] followed by text) ===
+    city, district = None, None
+    loc_img = card.select_one('img[alt="地區"]')
+    if loc_img:
+        # Text is the next sibling or in the parent div
+        parent = loc_img.parent
+        if parent:
+            loc_text = parent.get_text(strip=True)
+            if loc_text:
+                city, district = parse_location(loc_text)
+
+    # === Budget (img[alt="金額"] followed by text) ===
+    budget = None
+    budget_img = card.select_one('img[alt="金額"]')
+    if budget_img:
+        parent = budget_img.parent
+        if parent:
+            budget = parent.get_text(strip=True)
+
+    # === Time ("XX分鐘前" in div_request_card_first) ===
     posted_at = None
-    time_icon = card.select_one('.icon_time_circle')
-    if time_icon:
-        time_text = time_icon.find_next(string=True)
-        if time_text:
-            posted_at = parse_relative_time(time_text.strip())
-    if not posted_at:
-        for el in card.select('span, div'):
-            text = el.get_text(strip=True)
-            if re.search(r'(分鐘前|小時前|天前|\d{4}/\d)', text):
+    if first_div:
+        for div in first_div.select('div'):
+            text = div.get_text(strip=True)
+            if re.search(r'(分鐘前|小時前|天前|\d{4}/\d)', text) and len(text) < 30:
                 posted_at = parse_relative_time(text)
                 break
 
-    # Budget
-    budget = None
-    budget_icon = card.select_one('.icon_dollar_circle')
-    if budget_icon:
-        budget_text = budget_icon.find_next(string=True)
-        if budget_text:
-            budget = budget_text.strip()
-    if not budget:
-        for el in card.select('span, div'):
-            text = el.get_text(strip=True)
-            if re.search(r'(\$|元|NT|面議|\d+,\d+)', text) and len(text) < 30:
-                budget = text
-                break
-
-    # Description
+    # === Description (spans inside div_request_card_second) ===
     description = None
-    desc_el = card.select_one('.div_request_card_second') or card.select_one('[class*="desc"]')
-    if desc_el:
-        description = desc_el.get_text(strip=True)[:500]
-
-    # Client name
-    client_name = None
-    name_el = card.select_one('[class*="name"]') or card.select_one('[class*="client"]')
-    if name_el:
-        client_name = name_el.get_text(strip=True)
+    second_div = card.select_one('.div_request_card_second')
+    if second_div:
+        spans = second_div.select('span')
+        if spans:
+            desc_parts = [s.get_text(strip=True) for s in spans if s.get_text(strip=True)]
+            description = ' '.join(desc_parts)[:500] if desc_parts else None
 
     return {
         "pro360_url": url,
