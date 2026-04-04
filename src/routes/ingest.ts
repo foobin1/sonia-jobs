@@ -6,15 +6,15 @@ import { env } from '../config.js';
 import { sql } from 'drizzle-orm';
 
 const jobSchema = z.object({
-  pro360_url: z.string().url(),
+  pro360_url: z.string().min(1),
   title: z.string().min(1),
   category: z.string().min(1),
-  city: z.string().optional(),
-  district: z.string().optional(),
-  posted_at: z.string().optional(),
-  description: z.string().optional(),
-  budget: z.string().optional(),
-  client_name: z.string().optional(),
+  city: z.string().nullable().optional(),
+  district: z.string().nullable().optional(),
+  posted_at: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  budget: z.string().nullable().optional(),
+  client_name: z.string().nullable().optional(),
 });
 
 const ingestSchema = z.object({
@@ -28,7 +28,13 @@ export function registerIngestRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: 'Invalid ingest key' });
     }
 
-    const body = ingestSchema.parse(request.body);
+    let body;
+    try {
+      body = ingestSchema.parse(request.body);
+    } catch (err: any) {
+      app.log.error({ err: err.message }, '[ingest] Validation error');
+      return reply.status(400).send({ error: 'Validation failed', details: err.errors ?? err.message });
+    }
     let inserted = 0;
 
     for (const job of body.jobs) {
