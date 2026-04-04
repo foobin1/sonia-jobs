@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sonia Jobs — PRO360 Job Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    body { background: #0a0a0f; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .glass { background: rgba(255,255,255,0.04); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+    .glass:hover { background: rgba(255,255,255,0.07); }
+    .badge { padding: 2px 10px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .badge-cleaning { background: rgba(59,130,246,0.2); color: #60a5fa; }
+    .badge-handyman { background: rgba(234,179,8,0.2); color: #facc15; }
+    .badge-moving { background: rgba(249,115,22,0.2); color: #fb923c; }
+    .badge-tutoring { background: rgba(168,85,247,0.2); color: #c084fc; }
+    .badge-design { background: rgba(236,72,153,0.2); color: #f472b6; }
+    .badge-photography { background: rgba(20,184,166,0.2); color: #2dd4bf; }
+    .badge-renovation { background: rgba(239,68,68,0.2); color: #f87171; }
+    .badge-pest_control { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .badge-ac_repair { background: rgba(96,165,250,0.2); color: #93c5fd; }
+    .badge-web_dev { background: rgba(139,92,246,0.2); color: #a78bfa; }
+    .desc-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 50; display: none; justify-content: center; align-items: center; padding: 1rem; }
+    .modal-backdrop.active { display: flex; }
+    .modal-content { background: #1a1a2e; border: 1px solid rgba(255,255,255,0.1); border-radius: 1rem; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 1.5rem; }
+    .stat-card { text-align: center; padding: 1rem; }
+    .stat-num { font-size: 1.5rem; font-weight: 700; color: #60a5fa; }
+    .pagination button { min-width: 36px; height: 36px; border-radius: 8px; }
+    .pagination button.active { background: rgba(59,130,246,0.3); color: #60a5fa; }
+    select, input[type="text"] {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+      color: #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 0.875rem;
+    }
+    select:focus, input:focus { outline: none; border-color: rgba(96,165,250,0.5); }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Header -->
+  <header class="glass sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Sonia Jobs</h1>
+      <span class="text-xs text-gray-500" id="updateTime"></span>
+    </div>
+    <button onclick="toggleLang()" class="text-sm px-3 py-1 rounded-lg glass hover:bg-white/10 transition" id="langBtn">中文</button>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-4">
+    <!-- Filters -->
+    <div class="flex flex-wrap gap-2 mb-4">
+      <select id="filterCategory" onchange="loadJobs(1)">
+        <option value="" data-en="All Categories" data-zh="全部分類">All Categories</option>
+      </select>
+      <select id="filterCity" onchange="loadJobs(1)">
+        <option value="" data-en="All Cities" data-zh="全部地區">All Cities</option>
+      </select>
+      <input type="text" id="filterKeyword" placeholder="Search..." onkeydown="if(event.key==='Enter')loadJobs(1)" class="w-40">
+      <select id="filterHours" onchange="loadJobs(1)">
+        <option value="24" data-en="Last 24h" data-zh="最近24小時">Last 24h</option>
+        <option value="12" data-en="Last 12h" data-zh="最近12小時">Last 12h</option>
+        <option value="48" data-en="Last 48h" data-zh="最近48小時">Last 48h</option>
+        <option value="168" data-en="Last 7 days" data-zh="最近7天">Last 7 days</option>
+        <option value="0" data-en="All Time" data-zh="全部時間">All Time</option>
+      </select>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <!-- Job Cards (2/3) -->
+      <div class="lg:col-span-2 space-y-3" id="jobList">
+        <div class="text-center text-gray-500 py-12" id="emptyState">
+          <div class="text-4xl mb-2">📋</div>
+          <span data-en="No jobs found" data-zh="尚無工作">No jobs found</span>
+        </div>
+      </div>
+
+      <!-- Stats Sidebar (1/3) -->
+      <div class="space-y-4">
+        <!-- Total Stats -->
+        <div class="glass rounded-xl p-4">
+          <div class="grid grid-cols-2 gap-2">
+            <div class="stat-card">
+              <div class="stat-num" id="statTotal">0</div>
+              <div class="text-xs text-gray-400" data-en="Total Jobs" data-zh="總工作數">Total Jobs</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num" id="statRecent">0</div>
+              <div class="text-xs text-gray-400" data-en="Recent" data-zh="最近">Recent</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- By Category Chart -->
+        <div class="glass rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3" data-en="By Category" data-zh="依分類">By Category</h3>
+          <canvas id="chartCategory" height="200"></canvas>
+        </div>
+
+        <!-- By City Chart -->
+        <div class="glass rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3" data-en="By City" data-zh="依地區">By City</h3>
+          <canvas id="chartCity" height="200"></canvas>
+        </div>
+
+        <!-- Hourly Activity -->
+        <div class="glass rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3" data-en="Hourly Activity" data-zh="每小時活動">Hourly Activity</h3>
+          <canvas id="chartHourly" height="150"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex justify-center gap-1 mt-6 pagination" id="pagination"></div>
+  </main>
+
+  <!-- Detail Modal -->
+  <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-content" id="modalContent"></div>
+  </div>
+
+<script>
+const i18n = { lang: localStorage.getItem('sonia-jobs-lang') || 'en' };
+const CATEGORY_COLORS = {
+  cleaning: '#60a5fa', handyman: '#facc15', moving: '#fb923c', tutoring: '#c084fc',
+  design: '#f472b6', photography: '#2dd4bf', renovation: '#f87171',
+  pest_control: '#4ade80', ac_repair: '#93c5fd', web_dev: '#a78bfa'
+};
+let charts = {};
+let currentPage = 1;
+let categoriesData = [];
+
+// === i18n ===
+function toggleLang() {
+  i18n.lang = i18n.lang === 'en' ? 'zh' : 'en';
+  localStorage.setItem('sonia-jobs-lang', i18n.lang);
+  applyLang();
+  loadJobs(currentPage);
+  loadStats();
+}
+
+function applyLang() {
+  document.getElementById('langBtn').textContent = i18n.lang === 'en' ? '中文' : 'EN';
+  document.querySelectorAll('[data-en]').forEach(el => {
+    el.textContent = el.getAttribute(i18n.lang === 'en' ? 'data-en' : 'data-zh');
+  });
+  // Update filter options
+  document.querySelectorAll('select option[data-en]').forEach(opt => {
+    opt.textContent = opt.getAttribute(i18n.lang === 'en' ? 'data-en' : 'data-zh');
+  });
+  document.getElementById('filterKeyword').placeholder = i18n.lang === 'en' ? 'Search...' : '搜尋...';
+}
+
+// === API ===
+async function loadCategories() {
+  try {
+    const res = await fetch('/api/categories');
+    categoriesData = await res.json();
+    const sel = document.getElementById('filterCategory');
+    categoriesData.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.slug;
+      opt.textContent = i18n.lang === 'en' ? c.nameEn : c.nameZh;
+      opt.setAttribute('data-en', c.nameEn);
+      opt.setAttribute('data-zh', c.nameZh);
+      sel.appendChild(opt);
+    });
+  } catch (e) { console.error('Failed to load categories:', e); }
+}
+
+async function loadJobs(page = 1) {
+  currentPage = page;
+  const params = new URLSearchParams();
+  const cat = document.getElementById('filterCategory').value;
+  const city = document.getElementById('filterCity').value;
+  const keyword = document.getElementById('filterKeyword').value.trim();
+  const hours = document.getElementById('filterHours').value;
+
+  if (cat) params.set('category', cat);
+  if (city) params.set('city', city);
+  if (keyword) params.set('keyword', keyword);
+  if (hours !== '0') params.set('hours', hours);
+  params.set('page', page.toString());
+  params.set('limit', '20');
+
+  try {
+    const res = await fetch(`/api/jobs?${params}`);
+    const data = await res.json();
+    renderJobs(data.jobs);
+    renderPagination(data.pagination);
+    document.getElementById('updateTime').textContent =
+      (i18n.lang === 'en' ? 'Updated ' : '更新於 ') + new Date().toLocaleTimeString();
+  } catch (e) { console.error('Failed to load jobs:', e); }
+}
+
+async function loadStats() {
+  const hours = document.getElementById('filterHours').value;
+  const params = hours !== '0' ? `?hours=${hours}` : '?hours=8760';
+  try {
+    const res = await fetch(`/api/stats${params}`);
+    const data = await res.json();
+    renderStats(data);
+  } catch (e) { console.error('Failed to load stats:', e); }
+}
+
+// === Render Jobs ===
+function renderJobs(jobs) {
+  const list = document.getElementById('jobList');
+  const empty = document.getElementById('emptyState');
+
+  if (!jobs || !jobs.length) {
+    list.innerHTML = '';
+    list.appendChild(empty);
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  list.innerHTML = jobs.map(j => {
+    const catName = getCategoryName(j.category);
+    const loc = [j.city, j.district].filter(Boolean).join(' ');
+    const timeAgo = j.scrapedAt ? formatTimeAgo(j.scrapedAt) : '';
+    const desc = j.description || '';
+
+    return `
+      <div class="glass rounded-xl p-4 cursor-pointer transition" onclick='showDetail(${JSON.stringify(j).replace(/'/g, "&#39;")})'>
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="badge badge-${j.category}">${catName}</span>
+            ${loc ? `<span class="text-xs text-gray-400">📍 ${loc}</span>` : ''}
+            ${timeAgo ? `<span class="text-xs text-gray-500">${timeAgo}</span>` : ''}
+          </div>
+          ${j.budget ? `<span class="text-sm text-green-400 font-medium whitespace-nowrap">💰 ${j.budget}</span>` : ''}
+        </div>
+        <h3 class="font-semibold text-white mb-1">${esc(j.title)}</h3>
+        ${desc ? `<p class="text-sm text-gray-400 desc-clamp">${esc(desc)}</p>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+// === Render Stats ===
+function renderStats(data) {
+  document.getElementById('statTotal').textContent = data.total.toLocaleString();
+  document.getElementById('statRecent').textContent = data.recent.toLocaleString();
+
+  // Category chart
+  if (charts.category) charts.category.destroy();
+  const catLabels = data.byCategory.map(c =>
+    i18n.lang === 'en' ? (c.name_en || c.category) : (c.name_zh || c.category)
+  );
+  const catColors = data.byCategory.map(c => CATEGORY_COLORS[c.category] || '#64748b');
+  charts.category = new Chart(document.getElementById('chartCategory'), {
+    type: 'bar',
+    data: {
+      labels: catLabels,
+      datasets: [{ data: data.byCategory.map(c => c.count), backgroundColor: catColors, borderRadius: 4 }]
+    },
+    options: chartOpts(true)
+  });
+
+  // City chart
+  if (charts.city) charts.city.destroy();
+  charts.city = new Chart(document.getElementById('chartCity'), {
+    type: 'bar',
+    data: {
+      labels: data.byCity.map(c => c.city),
+      datasets: [{ data: data.byCity.map(c => c.count), backgroundColor: 'rgba(96,165,250,0.5)', borderRadius: 4 }]
+    },
+    options: chartOpts(true)
+  });
+
+  // Hourly activity
+  if (charts.hourly) charts.hourly.destroy();
+  const hourLabels = data.hourly.map(h => new Date(h.hour).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  charts.hourly = new Chart(document.getElementById('chartHourly'), {
+    type: 'line',
+    data: {
+      labels: hourLabels,
+      datasets: [{
+        data: data.hourly.map(h => h.count),
+        borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.1)',
+        fill: true, tension: 0.4, pointRadius: 2
+      }]
+    },
+    options: chartOpts(false)
+  });
+
+  // Populate city filter
+  const citySelect = document.getElementById('filterCity');
+  const currentCity = citySelect.value;
+  citySelect.innerHTML = '<option value="" data-en="All Cities" data-zh="全部地區">' +
+    (i18n.lang === 'en' ? 'All Cities' : '全部地區') + '</option>';
+  data.byCity.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.city;
+    opt.textContent = c.city;
+    if (c.city === currentCity) opt.selected = true;
+    citySelect.appendChild(opt);
+  });
+}
+
+function chartOpts(horizontal) {
+  return {
+    indexAxis: horizontal ? 'y' : 'x',
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+    }
+  };
+}
+
+// === Pagination ===
+function renderPagination(p) {
+  const el = document.getElementById('pagination');
+  if (!p || p.pages <= 1) { el.innerHTML = ''; return; }
+
+  let html = '';
+  if (p.page > 1) html += `<button class="glass" onclick="loadJobs(${p.page-1})">‹</button>`;
+
+  const start = Math.max(1, p.page - 2);
+  const end = Math.min(p.pages, p.page + 2);
+  if (start > 1) html += `<button class="glass" onclick="loadJobs(1)">1</button>`;
+  if (start > 2) html += `<span class="text-gray-500 px-1">…</span>`;
+
+  for (let i = start; i <= end; i++) {
+    html += `<button class="glass ${i === p.page ? 'active' : ''}" onclick="loadJobs(${i})">${i}</button>`;
+  }
+
+  if (end < p.pages - 1) html += `<span class="text-gray-500 px-1">…</span>`;
+  if (end < p.pages) html += `<button class="glass" onclick="loadJobs(${p.pages})">${p.pages}</button>`;
+  if (p.page < p.pages) html += `<button class="glass" onclick="loadJobs(${p.page+1})">›</button>`;
+
+  el.innerHTML = html;
+}
+
+// === Modal ===
+function showDetail(job) {
+  const catName = getCategoryName(job.category);
+  const loc = [job.city, job.district].filter(Boolean).join(' ');
+  const timeAgo = job.scrapedAt ? formatTimeAgo(job.scrapedAt) : '';
+  const postedTime = job.postedAt ? new Date(job.postedAt).toLocaleString() : '';
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="flex items-center justify-between mb-4">
+      <span class="badge badge-${job.category}">${catName}</span>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-white text-xl">&times;</button>
+    </div>
+    <h2 class="text-xl font-bold text-white mb-3">${esc(job.title)}</h2>
+    <div class="flex flex-wrap gap-3 text-sm text-gray-400 mb-4">
+      ${loc ? `<span>📍 ${loc}</span>` : ''}
+      ${job.budget ? `<span class="text-green-400">💰 ${job.budget}</span>` : ''}
+      ${postedTime ? `<span>🕐 ${postedTime}</span>` : ''}
+      ${job.clientName ? `<span>👤 ${job.clientName}</span>` : ''}
+    </div>
+    ${job.description ? `<div class="text-gray-300 leading-relaxed mb-4 whitespace-pre-wrap">${esc(job.description)}</div>` : ''}
+    <div class="flex gap-2 mt-4">
+      <a href="${job.pro360Url}" target="_blank" rel="noopener"
+         class="flex-1 text-center py-2 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition text-sm font-medium">
+        ${i18n.lang === 'en' ? 'View on PRO360 ↗' : '在PRO360查看 ↗'}
+      </a>
+    </div>
+  `;
+  document.getElementById('modalBackdrop').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modalBackdrop').classList.remove('active');
+}
+
+// === Helpers ===
+function getCategoryName(slug) {
+  const cat = categoriesData.find(c => c.slug === slug);
+  if (!cat) return slug;
+  return i18n.lang === 'en' ? cat.nameEn : cat.nameZh;
+}
+
+function formatTimeAgo(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return i18n.lang === 'en' ? 'just now' : '剛剛';
+  if (diff < 3600) return `${Math.floor(diff/60)}${i18n.lang === 'en' ? 'm ago' : '分鐘前'}`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}${i18n.lang === 'en' ? 'h ago' : '小時前'}`;
+  return `${Math.floor(diff/86400)}${i18n.lang === 'en' ? 'd ago' : '天前'}`;
+}
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// === Init ===
+async function init() {
+  applyLang();
+  await loadCategories();
+  loadJobs(1);
+  loadStats();
+  // Auto-refresh every 30s
+  setInterval(() => { loadJobs(currentPage); loadStats(); }, 30000);
+}
+
+// Keyboard: Escape closes modal
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+init();
+</script>
+</body>
+</html>
