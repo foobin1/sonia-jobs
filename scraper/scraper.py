@@ -42,9 +42,9 @@ def get_headers() -> dict:
 
 def fetch_pro360_page(page: int) -> list[dict]:
     """Fetch and parse a single page of the PRO360 global feed."""
-    # All /case/subgenre/* pages return the same global feed,
-    # so we just scrape /case/subgenre/cleaning as the entry point.
-    url = BASE_URL + "/case/subgenre/cleaning"
+    # Scrape the main /case page which has ALL job categories mixed.
+    # Individual /case/subgenre/* pages are unreliable (some filter, some don't).
+    url = BASE_URL + "/case"
     if page > 1:
         url += f"?page={page}"
 

@@ -22,7 +22,7 @@ PRO360_CATEGORY_MAP: dict[str, list[str]] = {
     # handyman BEFORE renovation — "馬桶裝修" is plumbing, not renovation
     "handyman": [
         "水電", "馬桶", "漏水", "抓漏", "通水管", "管線",
-        "插座", "開關", "配電", "電路", "燈具", "熱水器安裝",
+        "插座", "開關", "配電", "電路", "電線", "燈具", "熱水器安裝",
         "瓦斯", "洗臉盆", "水龍頭", "衛浴", "暖風機",
         "鎖匠", "換鎖", "開鎖", "門鎖",
         "洗衣機裝修", "洗衣機安裝",  # appliance install/repair = handyman
