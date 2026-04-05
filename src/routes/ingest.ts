@@ -67,6 +67,7 @@ export function registerIngestRoutes(app: FastifyInstance) {
           target: jobs.jobUrl,
           set: {
             title: job.title,
+            category: job.category,
             description: job.description ?? null,
             budget: job.budget ?? null,
             city: job.city ?? null,
