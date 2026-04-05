@@ -5,7 +5,7 @@ import { env } from './config.js';
 import { runMigrations } from './db/migrate.js';
 import { db } from './db/client.js';
 import { jobs } from './db/schema.js';
-import { lt, sql } from 'drizzle-orm';
+import { lt, or, and, isNull } from 'drizzle-orm';
 import { registerIngestRoutes } from './routes/ingest.js';
 import { registerJobRoutes } from './routes/jobs.js';
 import { registerStatsRoutes } from './routes/stats.js';
@@ -17,7 +17,14 @@ const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 async function cleanupOldJobs() {
   try {
     const cutoff = new Date(Date.now() - CLEANUP_DAYS * 24 * 60 * 60 * 1000);
-    const result = await db.delete(jobs).where(lt(jobs.scrapedAt, cutoff));
+    // Delete by posted_at; fall back to scraped_at for jobs with no posted_at
+    const result = await db.delete(jobs).where(
+      or(
+        lt(jobs.postedAt, cutoff),
+        // Jobs without posted_at: use scraped_at as fallback
+        and(isNull(jobs.postedAt), lt(jobs.scrapedAt, cutoff)),
+      )
+    );
     const count = result.rowCount ?? 0;
     if (count > 0) {
       console.log(`[cleanup] Deleted ${count} jobs older than ${CLEANUP_DAYS} days`);
