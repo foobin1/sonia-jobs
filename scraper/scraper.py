@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Multi-platform job scraper — PRO360 + Tasker → sonia-jobs API."""
+from __future__ import annotations
 
 import argparse
 import os

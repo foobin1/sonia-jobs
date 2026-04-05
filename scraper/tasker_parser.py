@@ -1,4 +1,5 @@
 """Parse Tasker.com.tw job listings from SSR NUXT data payload."""
+from __future__ import annotations
 
 import re
 import json

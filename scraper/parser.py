@@ -1,4 +1,5 @@
 """Parse PRO360 job listing pages."""
+from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta, timezone
