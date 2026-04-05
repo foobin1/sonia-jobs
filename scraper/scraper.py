@@ -173,7 +173,7 @@ def ingest_jobs(jobs: list[dict]) -> dict | None:
             f"{API_URL}/api/ingest",
             json={"jobs": jobs},
             headers={"x-ingest-key": INGEST_KEY, "Content-Type": "application/json"},
-            timeout=30,
+            timeout=120,
         )
         resp.raise_for_status()
         result = resp.json()
@@ -200,8 +200,8 @@ def scrape_round(backfill: bool = False):
     all_jobs = pro360_jobs + tasker_jobs
 
     if all_jobs:
-        for i in range(0, len(all_jobs), 200):
-            batch = all_jobs[i:i + 200]
+        for i in range(0, len(all_jobs), 50):
+            batch = all_jobs[i:i + 50]
             ingest_jobs(batch)
 
     print(f"  === Total: {len(pro360_jobs)} PRO360 + {len(tasker_jobs)} Tasker = {len(all_jobs)} jobs ===")
