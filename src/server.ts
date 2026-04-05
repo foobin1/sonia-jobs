@@ -6,6 +6,7 @@ import { runMigrations } from './db/migrate.js';
 import { registerIngestRoutes } from './routes/ingest.js';
 import { registerJobRoutes } from './routes/jobs.js';
 import { registerStatsRoutes } from './routes/stats.js';
+import { registerTranslateRoutes } from './routes/translate.js';
 
 const app = Fastify({ logger: true });
 
@@ -19,6 +20,7 @@ app.register(fastifyStatic, {
 registerIngestRoutes(app);
 registerJobRoutes(app);
 registerStatsRoutes(app);
+registerTranslateRoutes(app);
 
 async function start() {
   try {
