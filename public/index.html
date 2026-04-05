@@ -83,9 +83,9 @@
       </select>
       <input type="text" id="filterKeyword" placeholder="Search..." onkeydown="if(event.key==='Enter')loadJobs(1,true)" class="w-40">
       <select id="filterHours" onchange="loadJobs(1,true)">
+        <option value="1" data-en="Last 1h" data-zh="最近1小時">Last 1h</option>
+        <option value="12" data-en="Last 12h" data-zh="最近12小時">Last 12h</option>
         <option value="24" data-en="Last 24h" data-zh="最近24小時">Last 24h</option>
-        <option value="48" data-en="Last 48h" data-zh="最近48小時">Last 48h</option>
-        <option value="72" data-en="Last 3 days" data-zh="最近3天">Last 3 days</option>
         <option value="0" data-en="All Time" data-zh="全部時間">All Time</option>
       </select>
     </div>
