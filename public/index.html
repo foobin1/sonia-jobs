@@ -155,7 +155,6 @@ let charts = {};
 let currentPage = 1;
 let currentSource = '';
 let categoriesData = [];
-const translationCache = new Map(); // text → english translation
 
 function setSource(source) {
   currentSource = source;
@@ -229,10 +228,6 @@ async function loadJobs(page = 1, scrollTop = false) {
     renderPagination(data.pagination);
     document.getElementById('updateTime').textContent =
       (i18n.lang === 'en' ? 'Updated ' : '更新於 ') + new Date().toLocaleTimeString();
-    // Translate job content if in English mode
-    if (i18n.lang === 'en' && data.jobs && data.jobs.length) {
-      await translateJobs(data.jobs);
-    }
   } catch (e) { console.error('Failed to load jobs:', e); }
 }
 
@@ -280,18 +275,21 @@ function renderJobs(jobs) {
 
   // Store jobs in a lookup so onclick doesn't need inline JSON
   window._jobsCache = {};
+  const isEn = i18n.lang === 'en';
   list.innerHTML = jobs.map((j, i) => {
     window._jobsCache[i] = j;
     const catName = getCategoryName(j.category);
-    const loc = [j.city, j.district].filter(Boolean).join(' ');
+    const title = (isEn && j.titleEn) ? j.titleEn : j.title;
+    const desc = (isEn && j.descriptionEn) ? j.descriptionEn : (j.description || '');
+    const city = (isEn && j.cityEn) ? j.cityEn : j.city;
+    const loc = [city, j.district].filter(Boolean).join(' ');
     const timeAgo = j.scrapedAt ? formatTimeAgo(j.scrapedAt) : '';
-    const desc = j.description || '';
 
     const srcLabel = j.source === 'tasker' ? 'Tasker' : 'PRO360';
     const srcClass = j.source === 'tasker' ? 'source-tasker' : 'source-pro360';
 
     return `
-      <div class="glass rounded-xl p-4 cursor-pointer transition" onclick="showDetail(window._jobsCache[${i}])" data-job-idx="${i}">
+      <div class="glass rounded-xl p-4 cursor-pointer transition" onclick="showDetail(window._jobsCache[${i}])">
         <div class="flex items-start justify-between gap-2 mb-2">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="source-pill ${srcClass}">${srcLabel}</span>
@@ -301,8 +299,8 @@ function renderJobs(jobs) {
           </div>
           ${j.budget ? `<span class="text-sm text-green-400 font-medium whitespace-nowrap">💰 ${j.budget}</span>` : ''}
         </div>
-        <h3 class="font-semibold text-white mb-1 job-title">${esc(j.title)}</h3>
-        ${desc ? `<p class="text-sm text-gray-400 desc-clamp job-desc">${esc(desc)}</p>` : ''}
+        <h3 class="font-semibold text-white mb-1">${esc(title)}</h3>
+        ${desc ? `<p class="text-sm text-gray-400 desc-clamp">${esc(desc)}</p>` : ''}
       </div>
     `;
   }).join('');
@@ -408,20 +406,17 @@ function renderPagination(p) {
 // === Modal ===
 function showDetail(job) {
   const catName = getCategoryName(job.category);
-  const loc = [job.city, job.district].filter(Boolean).join(' ');
+  const isEn = i18n.lang === 'en';
+  const title = (isEn && job.titleEn) ? job.titleEn : job.title;
+  const description = (isEn && job.descriptionEn) ? job.descriptionEn : job.description;
+  const cityDisplay = (isEn && job.cityEn) ? job.cityEn : job.city;
+  const loc = [cityDisplay, job.district].filter(Boolean).join(' ');
   const timeAgo = job.scrapedAt ? formatTimeAgo(job.scrapedAt) : '';
   const postedTime = job.postedAt ? new Date(job.postedAt).toLocaleString() : '';
 
   const srcLabel = job.source === 'tasker' ? 'Tasker' : 'PRO360';
   const srcClass = job.source === 'tasker' ? 'source-tasker' : 'source-pro360';
   const viewLabel = i18n.lang === 'en' ? `View on ${srcLabel} ↗` : `在${srcLabel}查看 ↗`;
-
-  const title = (i18n.lang === 'en' && translationCache.has(job.title))
-    ? translationCache.get(job.title) : job.title;
-  const description = (i18n.lang === 'en' && job.description && translationCache.has(job.description))
-    ? translationCache.get(job.description) : job.description;
-  const locTranslated = (i18n.lang === 'en' && loc && translationCache.has(loc))
-    ? translationCache.get(loc) : loc;
 
   document.getElementById('modalContent').innerHTML = `
     <div class="flex items-center justify-between mb-4">
@@ -433,7 +428,7 @@ function showDetail(job) {
     </div>
     <h2 class="text-xl font-bold text-white mb-3">${esc(title)}</h2>
     <div class="flex flex-wrap gap-3 text-sm text-gray-400 mb-4">
-      ${locTranslated ? `<span>📍 ${esc(locTranslated)}</span>` : ''}
+      ${loc ? `<span>📍 ${esc(loc)}</span>` : ''}
       ${job.budget ? `<span class="text-green-400">💰 ${job.budget}</span>` : ''}
       ${postedTime ? `<span>🕐 ${postedTime}</span>` : ''}
       ${job.clientName ? `<span>👤 ${job.clientName}</span>` : ''}
@@ -475,75 +470,6 @@ function esc(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
-}
-
-// === Translation ===
-async function translateJobs(jobs) {
-  // Collect texts that need translation (not already cached)
-  const textsToTranslate = [];
-  const textKeys = []; // track which field each text belongs to
-
-  for (const job of jobs) {
-    if (job.title && !translationCache.has(job.title)) {
-      textsToTranslate.push(job.title);
-      textKeys.push({ type: 'title', original: job.title });
-    }
-    if (job.description && !translationCache.has(job.description)) {
-      textsToTranslate.push(job.description);
-      textKeys.push({ type: 'desc', original: job.description });
-    }
-    const loc = [job.city, job.district].filter(Boolean).join(' ');
-    if (loc && !translationCache.has(loc)) {
-      textsToTranslate.push(loc);
-      textKeys.push({ type: 'loc', original: loc });
-    }
-  }
-
-  if (textsToTranslate.length === 0) {
-    // All cached — just update DOM
-    updateJobCardsWithTranslations(jobs);
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texts: textsToTranslate }),
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    // Store in cache
-    for (let i = 0; i < textKeys.length; i++) {
-      if (data.translations[i]) {
-        translationCache.set(textKeys[i].original, data.translations[i]);
-      }
-    }
-    // Update DOM with translations
-    updateJobCardsWithTranslations(jobs);
-  } catch (e) {
-    console.error('Translation failed:', e);
-  }
-}
-
-function updateJobCardsWithTranslations(jobs) {
-  if (i18n.lang !== 'en') return;
-  const cards = document.querySelectorAll('[data-job-idx]');
-  cards.forEach(card => {
-    const idx = parseInt(card.getAttribute('data-job-idx'));
-    const job = window._jobsCache[idx];
-    if (!job) return;
-
-    const titleEl = card.querySelector('.job-title');
-    const descEl = card.querySelector('.job-desc');
-
-    if (titleEl && translationCache.has(job.title)) {
-      titleEl.textContent = translationCache.get(job.title);
-    }
-    if (descEl && job.description && translationCache.has(job.description)) {
-      descEl.textContent = translationCache.get(job.description);
-    }
-  });
 }
 
 // === Init ===

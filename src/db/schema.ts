@@ -22,6 +22,9 @@ export const jobs = pgTable('jobs', {
   description: text('description'),
   budget: text('budget'),
   clientName: text('client_name'),
+  titleEn: text('title_en'),
+  descriptionEn: text('description_en'),
+  cityEn: text('city_en'),
   scrapedAt: timestamp('scraped_at', { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

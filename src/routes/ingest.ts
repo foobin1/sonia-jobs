@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { jobs } from '../db/schema.js';
 import { env } from '../config.js';
+import { translateText } from './translate.js';
 
 const jobSchema = z.object({
   job_url: z.string().min(1),
@@ -39,6 +40,15 @@ export function registerIngestRoutes(app: FastifyInstance) {
 
     for (const job of body.jobs) {
       try {
+        // Translate in background (fire-and-forget for speed)
+        const titleEn = await translateText(job.title).catch(() => null);
+        const descriptionEn = job.description
+          ? await translateText(job.description.slice(0, 500)).catch(() => null)
+          : null;
+        const cityEn = job.city
+          ? await translateText(job.city).catch(() => null)
+          : null;
+
         await db.insert(jobs).values({
           jobUrl: job.job_url,
           title: job.title,
@@ -50,6 +60,9 @@ export function registerIngestRoutes(app: FastifyInstance) {
           description: job.description ?? null,
           budget: job.budget ?? null,
           clientName: job.client_name ?? null,
+          titleEn,
+          descriptionEn,
+          cityEn,
         }).onConflictDoUpdate({
           target: jobs.jobUrl,
           set: {
@@ -59,6 +72,9 @@ export function registerIngestRoutes(app: FastifyInstance) {
             city: job.city ?? null,
             district: job.district ?? null,
             postedAt: job.posted_at ? new Date(job.posted_at) : null,
+            titleEn,
+            descriptionEn,
+            cityEn,
           },
         });
         inserted++;
