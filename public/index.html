@@ -90,6 +90,9 @@
       </select>
     </div>
 
+    <!-- Results Count -->
+    <div id="resultCount" class="text-sm text-gray-400 mb-2" style="display:none;"></div>
+
     <!-- Main Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <!-- Job Cards (2/3) -->
@@ -226,6 +229,18 @@ async function loadJobs(page = 1, scrollTop = false) {
     const data = await res.json();
     renderJobs(data.jobs);
     renderPagination(data.pagination);
+    // Show result count when any filter is active
+    const hasFilter = cat || city || keyword || currentSource;
+    const countEl = document.getElementById('resultCount');
+    if (hasFilter) {
+      const total = data.pagination.total;
+      countEl.textContent = i18n.lang === 'en'
+        ? `${total.toLocaleString()} job${total !== 1 ? 's' : ''} found`
+        : `找到 ${total.toLocaleString()} 個工作`;
+      countEl.style.display = '';
+    } else {
+      countEl.style.display = 'none';
+    }
     document.getElementById('updateTime').textContent =
       (i18n.lang === 'en' ? 'Updated ' : '更新於 ') + new Date().toLocaleTimeString();
   } catch (e) { console.error('Failed to load jobs:', e); }
