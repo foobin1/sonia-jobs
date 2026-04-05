@@ -75,14 +75,14 @@
 
     <!-- Filters -->
     <div class="flex flex-wrap gap-2 mb-4">
-      <select id="filterCategory" onchange="loadJobs(1)">
+      <select id="filterCategory" onchange="loadJobs(1,true)">
         <option value="" data-en="All Categories" data-zh="全部分類">All Categories</option>
       </select>
-      <select id="filterCity" onchange="loadJobs(1)">
+      <select id="filterCity" onchange="loadJobs(1,true)">
         <option value="" data-en="All Cities" data-zh="全部地區">All Cities</option>
       </select>
-      <input type="text" id="filterKeyword" placeholder="Search..." onkeydown="if(event.key==='Enter')loadJobs(1)" class="w-40">
-      <select id="filterHours" onchange="loadJobs(1)">
+      <input type="text" id="filterKeyword" placeholder="Search..." onkeydown="if(event.key==='Enter')loadJobs(1,true)" class="w-40">
+      <select id="filterHours" onchange="loadJobs(1,true)">
         <option value="72" data-en="Last 3 days" data-zh="最近3天">Last 3 days</option>
         <option value="24" data-en="Last 24h" data-zh="最近24小時">Last 24h</option>
         <option value="48" data-en="Last 48h" data-zh="最近48小時">Last 48h</option>
@@ -163,7 +163,7 @@ function setSource(source) {
     btn.classList.toggle('active', btn.dataset.source === source);
   });
   updateCategoryFilter();
-  loadJobs(1);
+  loadJobs(1, true);
   loadStats();
 }
 
@@ -172,7 +172,7 @@ function toggleLang() {
   i18n.lang = i18n.lang === 'en' ? 'zh' : 'en';
   localStorage.setItem('sonia-jobs-lang', i18n.lang);
   applyLang();
-  loadJobs(currentPage);
+  loadJobs(currentPage, true);
   loadStats();
 }
 
@@ -205,9 +205,9 @@ async function loadCategories() {
   } catch (e) { console.error('Failed to load categories:', e); }
 }
 
-async function loadJobs(page = 1) {
+async function loadJobs(page = 1, scrollTop = false) {
   currentPage = page;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (scrollTop) window.scrollTo({ top: 0, behavior: 'smooth' });
   const params = new URLSearchParams();
   const cat = document.getElementById('filterCategory').value;
   const city = document.getElementById('filterCity').value;
@@ -387,20 +387,20 @@ function renderPagination(p) {
   if (!p || p.pages <= 1) { el.innerHTML = ''; return; }
 
   let html = '';
-  if (p.page > 1) html += `<button class="glass" onclick="loadJobs(${p.page-1})">‹</button>`;
+  if (p.page > 1) html += `<button class="glass" onclick="loadJobs(${p.page-1},true)">‹</button>`;
 
   const start = Math.max(1, p.page - 2);
   const end = Math.min(p.pages, p.page + 2);
-  if (start > 1) html += `<button class="glass" onclick="loadJobs(1)">1</button>`;
+  if (start > 1) html += `<button class="glass" onclick="loadJobs(1,true)">1</button>`;
   if (start > 2) html += `<span class="text-gray-500 px-1">…</span>`;
 
   for (let i = start; i <= end; i++) {
-    html += `<button class="glass ${i === p.page ? 'active' : ''}" onclick="loadJobs(${i})">${i}</button>`;
+    html += `<button class="glass ${i === p.page ? 'active' : ''}" onclick="loadJobs(${i},true)">${i}</button>`;
   }
 
   if (end < p.pages - 1) html += `<span class="text-gray-500 px-1">…</span>`;
-  if (end < p.pages) html += `<button class="glass" onclick="loadJobs(${p.pages})">${p.pages}</button>`;
-  if (p.page < p.pages) html += `<button class="glass" onclick="loadJobs(${p.page+1})">›</button>`;
+  if (end < p.pages) html += `<button class="glass" onclick="loadJobs(${p.pages},true)">${p.pages}</button>`;
+  if (p.page < p.pages) html += `<button class="glass" onclick="loadJobs(${p.page+1},true)">›</button>`;
 
   el.innerHTML = html;
 }
